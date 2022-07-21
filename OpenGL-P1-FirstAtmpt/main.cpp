@@ -1,5 +1,6 @@
 #include <glad/glad.h>
 #include <glfw/glfw3.h>
+#include "Shader.h"
 
 #include <iostream>
 
@@ -11,9 +12,25 @@ void processInput(GLFWwindow* window);
 //vertex shader 
 const char *vertexShaderSource = "#version 330 core\n"
 	"layout (location = 0) in vec3 aPos;\n"
+	
+	"out vec4 vertexColor;"
+	
 	"void main()\n"
 	"{\n"
-	"	gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
+		"gl_Position = vec4(aPos, 1.0); \n"
+		"vertexColor = vec4(0.5, 0.0, 0.0, 1.0);\n"
+	"}\0";
+
+//second vertex shader
+const char *vertexShaderSource2 = "#version 330 core\n"
+	"layout (location = 0) in vec3 aPos;\n"	//the position variable has attr pos 0
+	"layout (location = 1) in vec3 aColor;\n"	//the color variable has attr pos 1
+	
+	"out vec3 ourColor;\n"					//output a color to the fragment shader
+
+	"void main(){\n"
+		"gl_Position = vec4(aPos, 1.0);\n"
+		"ourColor = aColor;\n" //set ourColor to the input color we got from the vertex data
 	"}\0";
 
 //fragment shader 1 - orange
@@ -23,7 +40,7 @@ const char *fragmentShaderSource = "#version 330 core\n"
 	"void main()\n"
 	"{\n"
 	"	FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-	"}\n";
+	"}\0";
 
 //Hello Triangle - Exercise 3
 //fragment shader 2 with dark grey color
@@ -33,26 +50,40 @@ const char *fragmentShaderSource2 = "#version 330 core\n"
 	"void main()\n"
 	"{\n"
 	"	FragColor = vec4(0.41f, 0.41f, 0.41f, 1.0f);\n"
-	"}\n";
+	"}\0";
+
+const char *fragmentShaderSource3 =
+	"#version 330 core\n"
+	
+	"out vec4 FragColor;\n"
+	"in vec3 ourColor;\n"
+
+	"void main()\n"
+	"{\n"
+		"FragColor = vec4(ourColor, 1.0); \n"
+	"}\0";
 
 
 int main() {
-	// this functions inits the GLFW lib; returns GL_TRUE if successful, otherwise GL_FALSE
+	///setup
+
+	//initalize GLFW lib, true if success
 	glfwInit();
 
-	// sets target opengl versions to 3, and specifically core-profile
-	// preventing access to pre-version opengl 3.2 backwards compatibility
+
+	//targeting opengl version
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	
-	// this windowHint is necessary for mac osx systems to initialize
+
+	//extra preprocessor content for mac systems
 	#ifdef __APPLE__
 		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	#endif
 
-	GLFWwindow *window = glfwCreateWindow(800, 600, "LearnOpenGL", NULL, NULL);
-	if (window == NULL){
+	GLFWwindow* window = glfwCreateWindow(800, 600, "Shader Time!", NULL, NULL);
+
+	if (window == NULL) {
 		std::cout << "Failed to create GLFW window" << std::endl;
 		glfwTerminate();
 		return -1;
@@ -61,146 +92,51 @@ int main() {
 	//make the created window the main context on the current thread
 	glfwMakeContextCurrent(window);
 
-	//initalize GLAD
+	//init GLAD
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-		std::cout << "Failed to initalize GLAD" << std::endl;
+		std::cout << "Failed to init GLAD" << std::endl;
 		return -1;
 	}
-	
-	//tell opengl the size of the rendering view window
+
+	//set opengl size of rendering view window
 	glViewport(0, 0, 800, 600);
 
-	//calling callback function
-	glfwSetFramebufferSizeCallback(window,framebuffer_size_callback);
+	//set window resize callback func
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-	///setting up shader 1
-	//setting up the vertex shader
-	unsigned int vertexShader;
-	vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-	glCompileShader(vertexShader);
+	///shader compiling
+	Shader ourShader1("VertexShaderPosColor.vs", "FragmentShaderExternalColorFromVS.fs");
 
-	//checking for compile time errors with vertex shader
-	int success;
-	char infoLog[512];
-	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-
-	if (!success) {
-		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
-	}
-
-	//setting up the fragment shader
-	unsigned int fragmentShader;
-	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-	glCompileShader(fragmentShader);
-
-	//checking for compile time errors with fragment shader
-	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-
-	if (!success) {
-		glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
-	}
-
-	//compiling the full shader program
-	unsigned int shaderProgram;
-	shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-	glLinkProgram(shaderProgram);
-
-	//check if the compilation of the shader program failed
-	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-	if (!success) {
-		glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl;
-	}
-
-	///setting up shader 2
-	//note: vertex shader unchanged, use with shader two before destruction
-
-	//set up of fragment shader
-	unsigned int fragmentShader2;
-	fragmentShader2 = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader2, 1, &fragmentShaderSource2, NULL);
-	glCompileShader(fragmentShader2);
-
-	//checking for compile time errors with fragment shader
-	glGetShaderiv(fragmentShader2, GL_COMPILE_STATUS, &success);
-
-	if (!success) {
-		glGetShaderInfoLog(fragmentShader2, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::FRAGMENT2::COMPILATION_FAILED\n" << infoLog << std::endl;
-	}
-
-	//compiling second shader program with new fragment shader
-	unsigned int shaderProgram2;
-	shaderProgram2 = glCreateProgram();
-	glAttachShader(shaderProgram2, vertexShader);
-	glAttachShader(shaderProgram2, fragmentShader2);
-	glLinkProgram(shaderProgram2);
-
-	//checking if compilation of second shader program failed
-	glGetProgramiv(shaderProgram2, GL_LINK_STATUS, &success);
-
-	if (!success) {
-		glGetProgramInfoLog(shaderProgram2, 512, NULL, infoLog);
-		std::cout << "ERROR::SHADER::SHADER2::COMPILATION_FAILED\n" << infoLog << std::endl;
-	}
-
-	//since the shader is activated, make sure to delete the other shader objects used
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
-	glDeleteShader(fragmentShader2);
-
-
-	///Hello Triangle - Exercise 2	
-	//vertex arrays for two triangles
-	float firstTriangle[] = {
-		-0.6f, 0.0f, 0.0f,
-		-0.1f, 0.5f, 0.0f,
-		-0.1f, -0.5f, 0.0f,	
+	///data 
+	float fourthTriangle[] = {
+		// positions         // colors
+		 0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,   // bottom right
+		-0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,   // bottom left
+		 0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f    // top 
 	};
 
-	float secondTriangle[] = {
-		0.1f, -0.5f, 0.0f,
-		0.6f, 0.0f, 0.0f,
-		0.1f, 0.5f, 0.0f
-	};
+	unsigned int VBOs[1], VAOs[1];
+	glGenVertexArrays(1, VAOs);
+	glGenBuffers(1, VBOs);
 
-	unsigned int VBOs[2], VAOs[2];
-	glGenVertexArrays(2, VAOs); //generating multiple VAO or VBO(buffers) at the same time
-	glGenBuffers(2, VBOs);
-
-	//first triangle, with binding VAO #1
 	glBindVertexArray(VAOs[0]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBOs[0]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(fourthTriangle), fourthTriangle, GL_STATIC_DRAW);
 	
-	glBindBuffer(GL_ARRAY_BUFFER, VBOs[0]); //setup of buffer (VBO)
-	glBufferData(GL_ARRAY_BUFFER, sizeof(firstTriangle), firstTriangle, GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0); //setup of how vertex is defined
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
-	//glBindVertexArray(0); no need to unbind at all as we directly bind a different VAO in the next few lines
 
-	//second triangle setup, directly binding VAO #2 (because we bind directly, no need to unbind explicitly)
-	glBindVertexArray(VAOs[1]);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
 
-	glBindBuffer(GL_ARRAY_BUFFER, VBOs[1]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(secondTriangle), secondTriangle, GL_STATIC_DRAW);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	//glBindVertexArray(0); //not necessary as well, BUT be aware of calls that could affect VAOs while this one is bound
-	//ex/ like binding element buffer objects, or enabling/disabling vertex attributes
-	//will unbinded for the sake of it
+	//unbind the VAO that was in use
 	glBindVertexArray(0);
 
-	///add-on to draw in wireframe mode
+	//add-on to draw in wireframe mode
 	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-
-	//this is the render loop, this will keep running until we tell GLFW to stop
-	//	-- glfwWindowShouldClose is a check to see if GLFW has been instructed to close, returns true if so
+	///rendering loop
 	while (!glfwWindowShouldClose(window)) {
 		// input
 		processInput(window);
@@ -209,22 +145,11 @@ int main() {
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f); //specifies color to clear buffer with
 		glClear(GL_COLOR_BUFFER_BIT); //clears color buffer
 
-		///Drawing code (in render loop) ref:Hello Triangle
-		//using first program with first fragment shader
-		glUseProgram(shaderProgram);
-
-		///Hello Triangle - EXERCISE 2
+		ourShader1.use();
 		glBindVertexArray(VAOs[0]);
-		glDrawArrays(GL_TRIANGLES, 0, 6);
-
-		//using second shader program for second triangle
-		glUseProgram(shaderProgram2);
-
-		glBindVertexArray(VAOs[1]);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glBindVertexArray(0);
 
-		///
 
 		//swaps the color buffer
 		glfwSwapBuffers(window);
@@ -232,11 +157,11 @@ int main() {
 		glfwPollEvents();
 	}
 
-	//deallocate resources once theyve outlived their purpose
-	glDeleteVertexArrays(2, VAOs);
-	glDeleteBuffers(2, VBOs);
-	glDeleteProgram(shaderProgram);
-	glDeleteProgram(shaderProgram2);
+	//deallocate resources once they've outlived their purposes
+
+	glDeleteVertexArrays(1, VAOs);
+	glDeleteBuffers(1, VBOs);
+	ourShader1.deallocateShader();
 
 	//function to remove remaining windows, release allocated resources, and sets the libary to an uninatlized state
 	glfwTerminate();
